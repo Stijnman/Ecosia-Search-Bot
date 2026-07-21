@@ -1,3 +1,17 @@
+// ==UserScript==
+// @name         Ecosia Randomized Search Helper
+// @namespace    https://github.com/Stijnman/Ecosia-Search-Bot
+// @version      1.1.0
+// @description  On-demand randomized Ecosia searches (manual start). Use responsibly.
+// @author       Stijnman
+// @match        https://www.ecosia.org/*
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @grant        GM_registerMenuCommand
+// @connect      random-word-api.herokuapp.com
+// @license      MIT
+// ==/UserScript==
+
 'use strict';
 
 // Unique process ID to prevent multiple instances of the script running simultaneously
