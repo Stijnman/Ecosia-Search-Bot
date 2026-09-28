@@ -1,135 +1,39 @@
-name: Test Competitor Researcher
+name: Userscript CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 permissions:
   contents: read
-  pull-requests: read
 
 jobs:
-  validate:
-    name: Validate
+  validate-userscript:
     runs-on: ubuntu-latest
-    
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          
-      - name: Install dependencies
-        run: npm ci
-        
-      - name: TypeScript type check
-        run: npx tsc --noEmit
-        
-      - name: Lint check
-        run: npm run lint || echo "Linting completed"
-
-  test:
-    name: Run Tests
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          
-      - name: Install dependencies
-        run: npm ci
-        
-      - name: Run tests
-        run: npm test || echo "Tests completed"
-
-  lint:
-    name: Lint Documentation
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        
-      - name: Install markdownlint
+      - name: JavaScript syntax
+        run: node --check index.js
+      - name: Validate userscript metadata
         run: |
-          npm install -g markdownlint-cli2
-          
-      - name: Lint all markdown files
+          python - <<'PY'
+          from pathlib import Path
+          source = Path("index.js").read_text()
+          assert source.startswith("// ==UserScript=="), "Missing userscript header"
+          for field in ("@name", "@match", "@grant", "@license"):
+              assert field in source.split("// ==/UserScript==")[0], f"Missing {field}"
+          assert "// ==/UserScript==" in source, "Unclosed userscript header"
+          print("Userscript metadata validated")
+          PY
+      - name: Check for merge markers and whitespace
         run: |
-          find . -name "*.md" -type f -not -path "./.git/*" -exec markdownlint-cli2 --config .markdownlint.json {} \;
-
-  spellcheck:
-    name: Spell Check
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        
-      - name: Install codespell
-        run: |
-          pip install codespell
-          
-      - name: Check spelling
-        run: |
-          codespell --skip ".git,*.json,*.yml,*.yaml,CHANGELOG.md,node_modules" \
-            --ignore-words-list "competitor,researcher,gemini,typescript,react,express,api,AI,http,https" \
-            --check-filenames \
-            --check-hidden
-
-  security-check:
-    name: Security Scan
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        
-      - name: Check for hardcoded secrets
-        uses: trufflesecurity/trufflehog@main
-        with:
-          path: ./
-          base: ${{ github.event.repository.default_branch }}
-          head: HEAD
-          extra_args: --debug --only-verified --fail
-
-  pre-commit:
-    name: Pre-commit Hooks
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          
-      - name: Install pre-commit
-        run: |
-          pip install pre-commit
-          npm install -g markdownlint-cli2
-          
-      - name: Install pre-commit hooks
-        run: |
-          pre-commit install
-          
-      - name: Run pre-commit on all files
-        run: |
-          pre-commit run --all-files --show-diff-on-failure || echo "Pre-commit checks completed"
+          git diff --check
+          if grep -nE '^(<<<<<<< |=======|>>>>>>> )' index.js; then
+            echo "Unresolved merge markers in userscript" >&2
+            exit 1
+          fi
